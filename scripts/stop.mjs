@@ -30,12 +30,10 @@ async function main() {
 		body: JSON.stringify({ sessionId }),
 		signal: AbortSignal.timeout(12e4)
 	}).catch(() => {});
-	fetch(`${REST_URL}/agentmemory/session/end`, {
-		method: "POST",
-		headers: authHeaders(),
-		body: JSON.stringify({ sessionId }),
-		signal: AbortSignal.timeout(5e3)
-	}).catch(() => {});
+	// session/end intentionally omitted: ZCode context continuation
+	// fires Stop hook prematurely, marking sessions as completed
+	// while they're still active. Watchdog (every hour) cleans up
+	// sessions idle > 6h.
 	setTimeout(() => process.exit(0), 1500).unref();
 }
 main();

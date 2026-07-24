@@ -53,9 +53,13 @@ jobs:
             echo "  ✓ done"
           done
 
-      # No ZCode-specific patches needed: upstream session-start.mjs always
-      # calls session/start; upstream stop.mjs always calls session/end.
-      # Session lifecycle: resume → active (via session/start), end → completed (via session/end).
+      - name: Apply ZCode-specific patches
+        if: steps.version.outputs.update == 'true'
+        run: |
+          # Remove session/end from stop.mjs — ZCode context continuation
+          # fires Stop hook prematurely. Watchdog handles cleanup.
+          sed -i '/fetch.*session\/end/,/}).catch(() => {});/d' scripts/stop.mjs
+          echo "  ✓ patches applied"
 
       - name: Sync skill files from upstream
         if: steps.version.outputs.update == 'true'
