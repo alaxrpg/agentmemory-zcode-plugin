@@ -1,0 +1,92 @@
+name: Auto Update from Upstream
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # UTC 08:00 daily (Beijing 16:00)
+  workflow_dispatch:       # Manual trigger
+
+permissions:
+  contents: write
+
+jobs:
+  check-and-update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Check upstream version
+        id: version
+        run: |
+          CURRENT=$(node -p "require('./.zcode-plugin/plugin.json').version")
+          LATEST=$(npm view @agentmemory/agentmemory version 2>/dev/null || echo "$CURRENT")
+          echo "current=$CURRENT" >> $GITHUB_OUTPUT
+          echo "latest=$LATEST" >> $GITHUB_OUTPUT
+          if [ "$CURRENT" != "$LATEST" ]; then
+            echo "update=true" >> $GITHUB_OUTPUT
+            echo "✓ New version: $LATEST (current: $CURRENT)"
+          else
+            echo "update=false" >> $GITHUB_OUTPUT
+            echo "✓ Already latest: $CURRENT"
+          fi
+
+      - name: Sync hook scripts from upstream
+        if: steps.version.outputs.update == 'true'
+        run: |
+          BASE="https://raw.githubusercontent.com/rohitg00/agentmemory/main/plugin/scripts"
+          SCRIPTS=(session-start prompt-submit pre-tool-use post-tool-use stop post-tool-failure)
+          for s in "${SCRIPTS[@]}"; do
+            echo "→ $s.mjs"
+            curl -fsSL "$BASE/$s.mjs" -o "/tmp/$s.mjs" || { echo "  ✗ skip"; continue; }
+            # Inject env-loader import after shebang
+            if head -1 "/tmp/$s.mjs" | grep -q '^#!/'; then
+              sed -i '1a import "./env-loader.mjs";' "/tmp/$s.mjs"
+            else
+              sed -i '1i import "./env-loader.mjs";' "/tmp/$s.mjs"
+            fi
+            # Replace Claude Code variable with ZCode variable
+            sed -i 's|\${CLAUDE_PLUGIN_ROOT}|\${ZCODE_PLUGIN_ROOT}|g' "/tmp/$s.mjs"
+            mv "/tmp/$s.mjs" "scripts/$s.mjs"
+            echo "  ✓ done"
+          done
+
+      - name: Sync skill files from upstream
+        if: steps.version.outputs.update == 'true'
+        run: |
+          BASE="https://raw.githubusercontent.com/rohitg00/agentmemory/main/plugin/skills"
+          SKILLS=(recall remember session-history forget recap handoff commit-context commit-history)
+          for skill in "${SKILLS[@]}"; do
+            echo "→ $skill"
+            mkdir -p "skills/$skill"
+            curl -fsSL "$BASE/$skill/SKILL.md" -o "skills/$skill/SKILL.md" || echo "  ✗ SKILL.md missing"
+            curl -fsSL "$BASE/$skill/EXAMPLES.md" -o "skills/$skill/EXAMPLES.md" 2>/dev/null || true
+          done
+
+      - name: Update plugin version
+        if: steps.version.outputs.update == 'true'
+        run: |
+          node -e "
+            const fs = require('fs');
+            const p = JSON.parse(fs.readFileSync('./.zcode-plugin/plugin.json','utf8'));
+            p.version = '${{ steps.version.outputs.latest }}';
+            fs.writeFileSync('./.zcode-plugin/plugin.json', JSON.stringify(p, null, 2) + '\n');
+          "
+          echo "✓ plugin.json updated to ${{ steps.version.outputs.latest }}"
+
+      - name: Commit and tag
+        if: steps.version.outputs.update == 'true'
+        run: |
+          git config user.name "agentmemory-bot"
+          git config user.email "bot@agentmemory.local"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: auto-update to v${{ steps.version.outputs.latest }}"
+            git tag "v${{ steps.version.outputs.latest }}"
+            git push origin HEAD --tags
+            echo "✓ Committed and tagged v${{ steps.version.outputs.latest }}"
+          fi
