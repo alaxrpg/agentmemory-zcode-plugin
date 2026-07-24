@@ -2,6 +2,9 @@
 import "./env-loader.mjs";
 import { execSync } from "node:child_process";
 import { basename } from "node:path";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 //#region src/hooks/_project.ts
 function resolveProject(cwd) {
@@ -49,11 +52,18 @@ async function main() {
 	} catch {
 		return;
 	}
-	if (isSdkChildContext(data)) return;
-	const sessionId = data.session_id || data.sessionId || `ses_${Date.now().toString(36)}`;
-	const cwd = data.cwd || process.cwd();
-	const project = resolveProject(data.cwd);
-	const url = `${REST_URL}/agentmemory/session/start`;
+		if (isSdkChildContext(data)) return;
+		const sessionId = data.session_id || data.sessionId || `ses_${Date.now().toString(36)}`;
+		const cwd = data.cwd || process.cwd();
+		const project = resolveProject(data.cwd);
+
+		// Dedup: skip if this session was already started (prevents time reset on resume/reload)
+		const cacheDir = join(homedir(), ".agentmemory", ".cache");
+		const markerFile = join(cacheDir, `session_${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`);
+		if (existsSync(markerFile)) return;
+		try { mkdirSync(cacheDir, { recursive: true }); writeFileSync(markerFile, Date.now().toString()); } catch {}
+
+		const url = `${REST_URL}/agentmemory/session/start`;
 	const init = {
 		method: "POST",
 		headers: authHeaders(),
