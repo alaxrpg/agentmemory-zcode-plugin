@@ -30,12 +30,8 @@ async function main() {
 		body: JSON.stringify({ sessionId }),
 		signal: AbortSignal.timeout(12e4)
 	}).catch(() => {});
-	fetch(`${REST_URL}/agentmemory/session/end`, {
-		method: "POST",
-		headers: authHeaders(),
-		body: JSON.stringify({ sessionId }),
-		signal: AbortSignal.timeout(5e3)
-	}).catch(() => {});
+	// session/end removed: sessions stay "active" and the dashboard determines
+	// completion status from updatedAt. The observe() endpoint handles reactivation.
 	setTimeout(() => process.exit(0), 1500).unref();
 }
 main();

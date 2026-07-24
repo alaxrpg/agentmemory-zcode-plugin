@@ -57,13 +57,17 @@ async function main() {
 		const cwd = data.cwd || process.cwd();
 		const project = resolveProject(data.cwd);
 
-		// Dedup: marker prevents duplicate session creation but still reactivates on resume
-		const cacheDir = join(homedir(), ".agentmemory", ".cache");
-		const markerFile = join(cacheDir, `session_${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`);
-		const isResume = existsSync(markerFile);
-		if (!isResume) {
-			try { mkdirSync(cacheDir, { recursive: true }); writeFileSync(markerFile, Date.now().toString()); } catch {}
-		}
+	// Dedup: marker prevents duplicate session creation. On resume, skip session/start
+	// to avoid resetting observationCount — the session already exists and observe()
+	// will pick up new observations.
+	const cacheDir = join(homedir(), ".agentmemory", ".cache");
+	const markerFile = join(cacheDir, `session_${sessionId.replace(/[^a-zA-Z0-9_-]/g, "_")}`);
+	const isResume = existsSync(markerFile);
+	if (!isResume) {
+		try { mkdirSync(cacheDir, { recursive: true }); writeFileSync(markerFile, Date.now().toString()); } catch {}
+	}
+
+	if (isResume) return;
 
 		const url = `${REST_URL}/agentmemory/session/start`;
 	const init = {
