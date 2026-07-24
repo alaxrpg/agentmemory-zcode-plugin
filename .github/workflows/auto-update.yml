@@ -53,6 +53,18 @@ jobs:
             echo "  ✓ done"
           done
 
+      - name: Apply ZCode-specific patches
+        if: steps.version.outputs.update == 'true'
+        run: |
+          echo "→ Patching session-start.mjs: skip session/start on resume"
+          sed -i 's|// Dedup: marker prevents duplicate session creation but still reactivates on resume|// Dedup: skip session/start on resume to avoid resetting observationCount|' scripts/session-start.mjs
+          sed -i '/const isResume = existsSync(markerFile);/a\
+          if (isResume) return;' scripts/session-start.mjs
+          
+          echo "→ Patching stop.mjs: remove session/end call"
+          sed -i '/fetch.*session\/end/,/}).catch(() => {});/d' scripts/stop.mjs
+          echo "  ✓ patches applied"
+
       - name: Sync skill files from upstream
         if: steps.version.outputs.update == 'true'
         run: |
