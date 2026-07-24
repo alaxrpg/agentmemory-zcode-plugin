@@ -78,15 +78,27 @@ jobs:
 
       - name: Commit and tag
         if: steps.version.outputs.update == 'true'
+        id: commit
         run: |
           git config user.name "agentmemory-bot"
           git config user.email "bot@agentmemory.local"
           git add -A
           if git diff --staged --quiet; then
             echo "No changes to commit"
+            echo "committed=false" >> $GITHUB_OUTPUT
           else
             git commit -m "chore: auto-update to v${{ steps.version.outputs.latest }}"
             git tag "v${{ steps.version.outputs.latest }}"
             git push origin HEAD --tags
             echo "✓ Committed and tagged v${{ steps.version.outputs.latest }}"
+            echo "committed=true" >> $GITHUB_OUTPUT
           fi
+
+      - name: Create GitHub Release
+        if: steps.commit.outputs.committed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.latest }}
+          name: v${{ steps.version.outputs.latest }}
+          generate_release_notes: true
+          make_latest: true
