@@ -1,8 +1,5 @@
 {
   "name": "agentmemory-zcode-plugin",
-  "interface": {
-    "displayName": "agentmemory"
-  },
   "plugins": [
     {
       "name": "agentmemory",
@@ -11,12 +8,7 @@
         "url": "https://github.com/alaxrpg/agentmemory-zcode-plugin.git",
         "path": ".",
         "ref": "master"
-      },
-      "policy": {
-        "installation": "AVAILABLE",
-        "authentication": "ON_INSTALL"
-      },
-      "category": "Memory"
+      }
     }
   ]
 }
