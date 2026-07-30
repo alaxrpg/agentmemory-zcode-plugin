@@ -26,35 +26,94 @@ fi
 ln -sf "$PROJECT_DIR" "$TARGET_DIR"
 echo "   ✓ $TARGET_DIR -> $PROJECT_DIR"
 
-# ── 2. Clean stale config entries ───────────────────────────
-echo "── 2. Config cleanup"
+# ── 2. Merge agentmemory hooks into ZCode config ────────────
+echo "── 2. Register hooks"
 if [ -f "$CONFIG" ]; then
-  # Remove old hooks section pointing to Codex paths
   if command -v python3 &>/dev/null; then
     python3 -c "
-import json, sys
+import json, sys, os
+
 with open('$CONFIG') as f:
     cfg = json.load(f)
 
-removed_hooks = False
-if 'hooks' in cfg:
-    del cfg['hooks']
-    removed_hooks = True
+# Initialize hooks section
+if 'hooks' not in cfg:
+    cfg['hooks'] = {'enabled': True, 'events': {}}
+cfg['hooks']['enabled'] = True
+events = cfg['hooks'].setdefault('events', {})
 
-removed_mcp = False
-if 'mcp' in cfg and 'servers' in cfg['mcp']:
-    if 'agentmemory' in cfg['mcp']['servers']:
-        del cfg['mcp']['servers']['agentmemory']
-        removed_mcp = True
+# Scripts directory (resolved at install time)
+scripts_dir = os.path.join('$TARGET_DIR', 'scripts')
+
+# ============ agentmemory hook definitions ============
+# Use absolute paths so hooks survive plugin updates
+am_hooks = {
+    'SessionStart': [{
+        'matcher': 'startup',
+        'hooks': [{
+            'type': 'command',
+            'command': f'node \"{scripts_dir}/session-start.mjs\"',
+            'statusMessage': 'agentmemory: loading session context'
+        }]
+    }],
+    'UserPromptSubmit': [{
+        'hooks': [{
+            'type': 'command',
+            'command': f'node \"{scripts_dir}/prompt-submit.mjs\"',
+            'statusMessage': 'agentmemory: recalling relevant memories'
+        }]
+    }],
+    'PreToolUse': [{
+        'matcher': 'Edit|Write|Read|Glob|Grep',
+        'hooks': [{
+            'type': 'command',
+            'command': f'node \"{scripts_dir}/pre-tool-use.mjs\"'
+        }]
+    }],
+    'PostToolUse': [{
+        'hooks': [{
+            'type': 'command',
+            'command': f'node \"{scripts_dir}/post-tool-use.mjs\"'
+        }]
+    }],
+    'PostToolUseFailure': [{
+        'hooks': [{
+            'type': 'command',
+            'command': f'node \"{scripts_dir}/post-tool-failure.mjs\"'
+        }]
+    }],
+    'Stop': [{
+        'hooks': [{
+            'type': 'command',
+            'command': f'node \"{scripts_dir}/stop.mjs\"'
+        }]
+    }]
+}
+
+# ============ Merge: remove old agentmemory entries, add current ============
+added = 0
+for event, entries in am_hooks.items():
+    # Remove old agentmemory entries from this event
+    if event in events:
+        old_count = len(events[event])
+        events[event] = [e for e in events[event]
+                         if not any('agentmemory' in h.get('command', '') or 'agentmemory-zcode-plugin' in h.get('command', '')
+                                    for h in e.get('hooks', []))]
+        if len(events[event]) < old_count:
+            print(f'   ✓ Cleaned {old_count - len(events[event])} stale {event} entries')
+    # Add current agentmemory entries
+    if event not in events:
+        events[event] = []
+    events[event].extend(entries)
+    added += 1
+    print(f'   ✓ {event} ({len(entries)} hook(s))')
 
 with open('$CONFIG', 'w') as f:
-    json.dump(cfg, f, indent=2)
+    json.dump(cfg, f, indent=2, ensure_ascii=False)
     f.write('\n')
 
-if removed_hooks: print('   ✓ Removed old hooks section')
-if removed_mcp: print('   ✓ Removed duplicate MCP server entry')
-if not removed_hooks and not removed_mcp: print('   ✓ Already clean')
-" 2>/dev/null || echo "   ⚠ python3 not available, skipped config cleanup"
+print(f'   ✓ Registered {added}/6 hook events')
+" 2>/dev/null || echo "   ⚠ python3 not available, skipped hook registration"
   else
     echo "   ⚠ config.json not found, skipping"
   fi
