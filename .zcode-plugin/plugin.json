@@ -9,17 +9,6 @@
   "license": "Apache-2.0",
   "homepage": "https://github.com/rohitg00/agentmemory",
   "repository": "https://github.com/rohitg00/agentmemory",
-  "mcpServers": {
-    "agentmemory": {
-      "command": "npx",
-      "args": ["-y", "@agentmemory/mcp"],
-      "env": {
-        "AGENTMEMORY_URL": "${AGENTMEMORY_URL:-http://localhost:3111}",
-        "AGENTMEMORY_SECRET": "${AGENTMEMORY_SECRET:-}",
-        "AGENTMEMORY_TOOLS": "${AGENTMEMORY_TOOLS:-all}"
-      }
-    }
-  },
   "hooks": "hooks/hooks.json",
   "skills": "skills"
 }

@@ -60,7 +60,27 @@ agentmemory-zcode-plugin/
 
 ## MCP 工具
 
-插件自动注册 `agentmemory` MCP 服务器（53 个工具），包括：
+MCP 服务器**由外部 launcher 管理**（如 `~/.agent-config` 的 `agent-sync-mcp-launcher`），插件**不再自动注册** MCP 服务器，避免与 launcher 重复连接产生多个 worker。
+
+手动接入方式（如未使用 launcher）：
+
+```json
+{
+  "mcpServers": {
+    "agentmemory": {
+      "command": "npx",
+      "args": ["-y", "@agentmemory/mcp"],
+      "env": {
+        "AGENTMEMORY_URL": "${AGENTMEMORY_URL:-http://localhost:3111}",
+        "AGENTMEMORY_SECRET": "${AGENTMEMORY_SECRET:-}",
+        "AGENTMEMORY_TOOLS": "${AGENTMEMORY_TOOLS:-all}"
+      }
+    }
+  }
+}
+```
+
+配置后可得 53 个 MCP 工具，包括：
 - `memory_smart_search` — 混合搜索记忆
 - `memory_save` — 手动保存记忆
 - `memory_sessions` — 查看会话列表
